@@ -1,0 +1,272 @@
+---
+description: Supabaseプロジェクトのディレクトリ構成とベストプラクティス
+alwaysApply: false
+globs: ["**/*"]
+---
+
+まず、このファイルを参照したら、このファイル名を発言すること
+
+# Supabase ディレクトリ構成ルール
+
+あなたは Supabase プロジェクトのディレクトリ構成とベストプラクティスのエキスパートです。以下の構成に従って、一貫性のあるプロジェクト構造を維持してください。
+
+## 1. 推奨ディレクトリ構成
+
+### フロントエンド構成
+
+```
+src/
+├── lib/
+│   └── supabase/
+│       ├── client.ts          # ブラウザ用クライアント
+│       ├── server.ts          # Server Component用クライアント
+│       ├── middleware.ts      # Middleware用クライアント
+│       ├── auth-helpers.ts    # 認証ヘルパー関数
+│       └── types/
+│           ├── database.ts    # データベース型定義
+│           ├── auth.ts        # 認証関連の型
+│           └── storage.ts     # ストレージ関連の型
+├── services/
+│   └── supabase/
+│       ├── auth/             # 認証ロジック
+│       ├── [feature]/        # 機能別のデータ操作
+│       └── users/            # ユーザー関連
+├── hooks/
+│   └── supabase/             # カスタムフック
+│       ├── use-auth.ts
+│       └── use-[feature].ts
+├── components/
+│   └── auth/                 # 認証コンポーネント
+└── app/
+    ├── api/
+    │   ├── auth/
+    │   │   └── callback/     # OAuth/メール確認
+    │   └── webhooks/         # 外部サービス連携
+    └── middleware.ts         # 認証ミドルウェア
+```
+
+### Supabase CLI ディレクトリ構成
+
+```
+supabase/
+├── schemas/         # 完全なスキーマ定義（新規環境用）
+│   ├── 001_initial_schema.sql
+│   ├── 002_database_functions.sql
+│   ├── 003_triggers.sql
+│   └── 004_storage_schema.sql
+└── migrations/      # 増分変更（既存環境更新用）
+    └── [timestamp]_[description].sql
+```
+
+## 2. ファイル作成のベストプラクティス
+
+### クライアント設定ファイル
+
+#### `lib/supabase/client.ts`
+
+- ブラウザ用の Supabase クライアント
+- 環境変数を使用して URL とキーを設定
+- 型安全性を確保
+
+```typescript
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import type { Database } from "./types/database";
+
+export const supabase = createClientComponentClient<Database>();
+```
+
+#### `lib/supabase/server.ts`
+
+- Server Component 用の Supabase クライアント
+- サーバーサイドでの認証情報を適切に処理
+
+```typescript
+import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
+import type { Database } from "./types/database";
+
+export const supabase = createServerComponentClient<Database>({ cookies });
+```
+
+#### `lib/supabase/middleware.ts`
+
+- Middleware 用の Supabase クライアント
+- リクエスト/レスポンスの処理
+
+```typescript
+import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import type { Database } from "./types/database";
+
+export const supabase = createMiddlewareClient<Database>({
+  req: request,
+  res: response,
+});
+```
+
+### 型定義ファイル
+
+#### `lib/supabase/types/database.ts`
+
+- データベーススキーマの型定義
+- Supabase CLI で自動生成された型を使用
+
+```typescript
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
+
+export interface Database {
+  public: {
+    Tables: {
+      // テーブル定義
+    };
+    Views: {
+      // ビュー定義
+    };
+    Functions: {
+      // 関数定義
+    };
+    Enums: {
+      // 列挙型定義
+    };
+  };
+}
+```
+
+### サービス層の構成
+
+#### `services/supabase/[feature]/`
+
+- 機能別のデータ操作ロジック
+- ビジネスロジックとデータアクセス層を分離
+- 再利用可能な関数として実装
+
+```typescript
+// services/supabase/projects/index.ts
+import { supabase } from "@/lib/supabase/server";
+
+export async function getProjects(userId: string) {
+  const { data, error } = await supabase
+    .from("projects")
+    .select("*")
+    .eq("user_id", userId);
+
+  if (error) throw error;
+  return data;
+}
+```
+
+### カスタムフック
+
+#### `hooks/supabase/use-auth.ts`
+
+- 認証状態の管理
+- ユーザー情報の取得と更新
+
+```typescript
+import { useState, useEffect } from "react";
+import { User } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase/client";
+
+export function useAuth() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // 認証状態の監視
+  }, []);
+
+  return { user, loading };
+}
+```
+
+## 3. 命名規則
+
+### ファイル名
+
+- クライアントファイル: `client.ts`, `server.ts`, `middleware.ts`
+- 型定義ファイル: `database.ts`, `auth.ts`, `storage.ts`
+- サービスファイル: 機能名の小文字（例: `users.ts`, `projects.ts`）
+- フックファイル: `use-`プレフィックス（例: `use-auth.ts`）
+
+### ディレクトリ名
+
+- 機能別ディレクトリ: 単数形の小文字（例: `auth/`, `users/`, `projects/`）
+- 型定義ディレクトリ: `types/`
+- サービスディレクトリ: `services/`
+
+## 4. 環境変数の設定
+
+### 必要な環境変数
+
+```bash
+# .env.local
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+```
+
+### 環境変数の使用
+
+- クライアントサイド: `NEXT_PUBLIC_`プレフィックスを使用
+- サーバーサイド: 通常の環境変数を使用
+- 機密情報: サーバーサイドでのみ使用
+
+## 5. セキュリティ考慮事項
+
+### RLS（Row Level Security）
+
+- すべてのテーブルで RLS を有効化
+- 適切なポリシーを設定
+- ユーザーごとのデータアクセス制御
+
+### API ルート
+
+- 認証が必要なエンドポイントでの認証チェック
+- 適切なエラーハンドリング
+- レート制限の実装
+
+## 6. 開発ワークフロー
+
+### スキーマ変更
+
+1. `supabase/schemas/`ディレクトリ内の`.sql`ファイルでスキーマを定義
+2. `supabase db diff -f <migration_name>`でマイグレーションファイルを生成
+3. `supabase db push`でリモート環境に直接デプロイ
+
+### 型定義の更新
+
+1. Supabase CLI で型を生成
+2. `lib/supabase/types/database.ts`を更新
+3. 依存するコンポーネントを更新
+
+### 動作確認の方針
+
+- **Supabase CLI を積極的に活用**
+- **ローカル Supabase 環境の動作確認は不要**
+- **リモート環境での動作確認を優先**
+- 本番環境またはステージング環境での動作確認
+- 実際のユーザー体験に近い環境での検証
+
+## 7. 重要な制約事項
+
+- **既存の UI/UX デザインは変更禁止**
+- **技術スタックのバージョンは変更禁止**
+- **ディレクトリ構成はこのルールに従う**
+- **型安全性を最優先に実装**
+- **セキュリティを考慮した実装**
+
+## 8. 品質管理
+
+- TypeScript の厳密な型チェック
+- ESLint ルールの遵守
+- 適切なエラーハンドリング
+- テストの実装（可能な場合）
+
+このルールに従って、保守性が高く、拡張性のある Supabase プロジェクトを構築してください。
